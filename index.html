@@ -83,10 +83,10 @@
         .overflow-y-auto { overflow-y: auto; }
 
         /* --- COMPONENTS --- */
-        #app { max-width: 480px; margin: 0 auto; height: 100%; position: relative; background: var(--bg); display: flex; flex-direction: column; }
+        #app { max-width: 480px; margin: 0 auto; height: 100dvh; position: relative; background: var(--bg); display: flex; flex-direction: column; }
         
         /* Main Content Area */
-        #main-content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 80px; scroll-behavior: smooth; }
+        #main-content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 90px; scroll-behavior: smooth; }
         
         /* Cards */
         .card { background: var(--card-bg); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); border: 1px solid var(--border); }
@@ -99,10 +99,11 @@
         
         /* Navigation */
         .nav-bar { 
-            position: absolute; bottom: 0; left: 0; right: 0; 
+            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px;
             background: white; border-top: 1px solid var(--border); 
             display: flex; justify-content: space-around; padding: 0.75rem 0;
             z-index: 40; padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+            box-shadow: 0 -4px 6px -1px rgb(0 0 0 / 0.05);
         }
         .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-muted); background: none; border: none; font-size: 0.7rem; font-weight: 600; cursor: pointer; width: 100%; }
         .nav-item.active { color: var(--primary); }
@@ -418,11 +419,25 @@
                     render();
                 }
             },
+            depositGoal: (id) => {
+                const amountStr = prompt('Quanto você quer guardar?');
+                if (amountStr === null) return; // User cancelled
+                const amount = parseFloat(amountStr);
+                if (isNaN(amount) || amount <= 0) return alert('Valor inválido');
+                
+                const g = state.goals.find(g => g.id === id);
+                if (g) {
+                    g.current += amount;
+                    Store.setGoals(state.goals);
+                    render();
+                }
+            },
             deleteGoal: (id) => {
-                if(!confirm('Apagar meta?')) return;
-                state.goals = state.goals.filter(g => g.id !== id);
-                Store.setGoals(state.goals);
-                render();
+                if(confirm('Tem certeza que deseja apagar esta meta?')) {
+                    state.goals = state.goals.filter(g => g.id !== id);
+                    Store.setGoals(state.goals);
+                    render();
+                }
             },
             saveSettings: (s) => {
                 state.settings = s;
@@ -582,7 +597,7 @@
                                         <p class="text-xs text-muted">Meta: ${Utils.formatCurrency(g.targetAmount)}</p>
                                     </div>
                                 </div>
-                                <button onclick="Actions.deleteGoal('${g.id}')" class="text-muted" style="background:none; border:none; padding: 8px;">
+                                <button onclick="event.stopPropagation(); Actions.deleteGoal('${g.id}')" class="text-muted" style="background:none; border:none; padding: 8px;">
                                     <span class="icon">❌</span>
                                 </button>
                             </div>
@@ -594,8 +609,7 @@
                                 <div class="progress-fill" style="width: ${pct}%"></div>
                             </div>
                             <div class="flex gap-2 mt-4">
-                                <button onclick="Actions.updateGoal('${g.id}', ${g.current + 100})" class="btn btn-ghost w-full text-xs" style="background: var(--info-light); color: var(--info)">+100</button>
-                                <button onclick="Actions.updateGoal('${g.id}', ${g.current + 500})" class="btn btn-ghost w-full text-xs" style="background: var(--info-light); color: var(--info)">+500</button>
+                                <button onclick="Actions.depositGoal('${g.id}')" class="btn btn-ghost w-full text-xs" style="background: var(--info-light); color: var(--info)">Depositar</button>
                             </div>
                         </div>
                         `;
@@ -787,25 +801,22 @@
                 }
             },
             selectCat: (id, el) => {
-                document.getElementById('tx-category').value = id;
                 document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('selected'));
                 el.classList.add('selected');
+                document.getElementById('tx-category').value = id;
             },
             submit: (e) => {
                 e.preventDefault();
                 const amount = parseFloat(document.getElementById('tx-amount').value);
-                if (!amount) return alert('Digite um valor!');
-                
-                const tx = {
-                    amount,
-                    type: state.modalType,
-                    categoryId: document.getElementById('tx-category').value,
-                    date: document.getElementById('tx-date').value,
-                    description: document.getElementById('tx-desc').value
-                };
-                
-                Actions.addTransaction(tx);
-                e.target.reset();
+                const categoryId = document.getElementById('tx-category').value;
+                const date = document.getElementById('tx-date').value;
+                const desc = document.getElementById('tx-desc').value;
+
+                if (!amount || !categoryId) return alert('Preencha valor e categoria');
+
+                Actions.addTransaction({
+                    amount, categoryId, date, description: desc, type: state.modalType
+                });
             }
         };
 
@@ -828,25 +839,26 @@
                 document.getElementById('goal-modal-overlay').classList.remove('open');
             },
             selectIcon: (icon, el) => {
-                document.getElementById('goal-icon').value = icon;
                 document.querySelectorAll('#goal-icons-grid .cat-btn').forEach(b => b.classList.remove('selected'));
                 el.classList.add('selected');
+                document.getElementById('goal-icon').value = icon;
             },
             submit: (e) => {
                 e.preventDefault();
                 const name = document.getElementById('goal-name').value;
                 const target = parseFloat(document.getElementById('goal-target').value);
-                if (!name || !target) return;
+                const icon = document.getElementById('goal-icon').value;
 
-                const goal = {
-                    name,
-                    targetAmount: target,
-                    icon: document.getElementById('goal-icon').value
-                };
-
-                Actions.addGoal(goal);
-                e.target.reset();
+                if(!name || !target) return;
+                Actions.addGoal({ name, targetAmount: target, icon });
             }
+        };
+
+        function saveSettingsUI() {
+            const allowance = parseFloat(document.getElementById('set-allowance').value) || 0;
+            const day = parseInt(document.getElementById('set-day').value);
+            const pin = document.getElementById('set-pin').value;
+            Actions.saveSettings({ allowance, day, pin: pin.length === 4 ? pin : null });
         }
 
         // --- PIN LOGIC ---
@@ -855,71 +867,48 @@
             init: () => {
                 if (state.settings.pin) {
                     document.getElementById('pin-lock').classList.remove('hidden');
-                    PinSystem.renderNumpad();
+                    PinSystem.renderPad();
                 }
             },
-            renderNumpad: () => {
+            renderPad: () => {
                 const pad = document.getElementById('numpad');
-                pad.innerHTML = [1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(n => {
-                    if (n === '') return '<div></div>';
-                    return `<button class="num-btn" onclick="PinSystem.press('${n}')">${n}</button>`;
-                }).join('');
+                pad.innerHTML = [1,2,3,4,5,6,7,8,9,0].map(n => 
+                    `<button class="num-btn" onclick="PinSystem.press(${n})" style="${n===0?'grid-column:2':''}">${n}</button>`
+                ).join('');
             },
-            press: (key) => {
-                if (key === '⌫') {
-                    PinSystem.input = PinSystem.input.slice(0, -1);
-                } else if (PinSystem.input.length < 4) {
-                    PinSystem.input += key;
-                }
-                PinSystem.updateDots();
-                
-                if (PinSystem.input.length === 4) {
-                    setTimeout(() => {
-                        if (PinSystem.input === state.settings.pin) {
-                            document.getElementById('pin-lock').classList.add('hidden');
-                            PinSystem.input = '';
-                            PinSystem.updateDots();
-                        } else {
-                            // Error animation
-                            const dots = document.querySelectorAll('.pin-dot');
-                            dots.forEach(d => d.classList.add('error'));
-                            setTimeout(() => {
-                                dots.forEach(d => d.classList.remove('error'));
-                                PinSystem.input = '';
-                                PinSystem.updateDots();
-                            }, 500);
-                        }
-                    }, 100);
+            press: (n) => {
+                if (PinSystem.input.length < 4) {
+                    PinSystem.input += n;
+                    PinSystem.updateDots();
+                    if (PinSystem.input.length === 4) {
+                        setTimeout(PinSystem.check, 200);
+                    }
                 }
             },
             updateDots: () => {
                 const dots = document.querySelectorAll('.pin-dot');
                 dots.forEach((d, i) => {
-                    if (i < PinSystem.input.length) d.classList.add('filled');
-                    else d.classList.remove('filled');
+                    d.classList.toggle('filled', i < PinSystem.input.length);
+                    d.classList.remove('error');
                 });
+            },
+            check: () => {
+                if (PinSystem.input === state.settings.pin) {
+                    document.getElementById('pin-lock').classList.add('hidden');
+                } else {
+                    document.querySelectorAll('.pin-dot').forEach(d => d.classList.add('error'));
+                    PinSystem.input = '';
+                    setTimeout(PinSystem.updateDots, 500);
+                }
             }
         };
-
-        function saveSettingsUI() {
-            const allowance = parseFloat(document.getElementById('set-allowance').value) || 0;
-            const day = parseInt(document.getElementById('set-day').value);
-            const pin = document.getElementById('set-pin').value;
-            
-            if (pin && pin.length !== 4) return alert('O PIN deve ter 4 dígitos!');
-            
-            Actions.saveSettings({
-                allowance,
-                day,
-                pin: pin || null
-            });
-        }
 
         // --- INIT ---
         window.onload = () => {
             render();
             PinSystem.init();
         };
+
     </script>
 </body>
 </html>
